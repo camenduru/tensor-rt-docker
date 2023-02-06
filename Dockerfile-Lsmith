@@ -1,0 +1,53 @@
+FROM nvcr.io/nvidia/tensorrt:22.11-py3
+
+WORKDIR /content
+
+RUN apt-get update
+RUN apt install -y software-properties-common
+RUN add-apt-repository ppa:flexiondotorg/nvtop
+RUN apt-get update
+RUN apt-get install -y nvtop
+RUN apt-get install -y tmux nano
+RUN apt-get upgrade -y
+RUN curl -sL https://deb.nodesource.com/setup_18.x  | bash -
+RUN apt-get install -y nodejs
+RUN npm install -g pnpm
+
+RUN pip install pyxtermjs
+RUN pip install tensorrt==8.5.3.1 -U
+
+RUN adduser --disabled-password --gecos '' user
+RUN chown -R user:user /content
+RUN chmod -R 777 /content
+RUN mkdir /.cache
+RUN chown -R user:user /.cache
+RUN chmod -R 777 /.cache
+USER user
+
+RUN git clone --single-branch https://github.com/camenduru/TensorRT && \
+    cd TensorRT && \
+    git submodule update --init --recursive
+    
+RUN cd TensorRT && mkdir -p build && \
+    cd build && \
+    cmake /content/TensorRT -DTRT_OUT_DIR=$PWD/out && \
+    cd plugin && \
+    make -j$(nproc)
+
+ENV PLUGIN_LIBS "/content/TensorRT/build/out/libnvinfer_plugin.so"
+
+ENV CUDA_MODULE_LOADING=LAZY
+ENV TERM=xterm-256color
+
+RUN pip install -r /content/TensorRT/demo/Diffusion/requirements.txt
+RUN cd /content/TensorRT/demo/Diffusion && mkdir -p onnx engine output
+
+RUN git clone https://github.com/camenduru/Lsmith.git
+WORKDIR /content/Lsmith
+RUN cd /content/Lsmith/frontend && pnpm i && pnpm build --out-dir ../dist
+RUN pip install -r requirements.txt
+
+EXPOSE 7860
+
+CMD LD_PRELOAD=${PLUGIN_LIBS} python -m uvicorn modules.main:app --host 0.0.0.0 --port 7860 
+# CMD pyxtermjs -p 7860 --host 0.0.0.0
