@@ -44,6 +44,7 @@ RUN cd /content/TensorRT/demo/Diffusion && mkdir -p onnx engine output
 
 RUN git clone https://github.com/camenduru/Lsmith.git
 WORKDIR /content/Lsmith
+RUN git submodule update --init --recursive
 RUN cd /content/Lsmith/frontend && pnpm i && pnpm build --out-dir ../dist
 RUN pip install -r requirements.txt
 
